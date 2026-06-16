@@ -5,6 +5,7 @@ use App\Http\Controllers\SalesController;
 use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FinanceReportController;
+use App\Http\Controllers\ProductReportController;
 
 Route::middleware(['auth', 'verified'])->group(function () {
     // =========================================================================
@@ -56,6 +57,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::view('categories', 'finance-categories.index')->name('categories.index');
         Route::view('transactions', 'finance-transactions.index')->name('transactions.index');
         Route::get('transactions/print/{printId}', [FinanceReportController::class, 'print'])->name('transactions.print');
+    });
+
+    // =========================================================================
+    // Reports
+    // =========================================================================
+    Route::prefix('reports')->name('reports.')->group(function () {
+        Route::get('stock', [ProductReportController::class, 'stockReport'])->name('stock');
+        Route::get('sales', [ProductReportController::class, 'salesReport'])->name('sales');
     });
 
     // =========================================================================
