@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Exception;
 use App\Models\Product;
+use App\Models\StockMovement;
 use Illuminate\Support\Str;
 use App\DTOs\ProductData;
 use App\Exceptions\ProductException;
@@ -50,6 +51,9 @@ class ProductService
     {
         return DB::transaction(function () use ($product, $data) {
             try {
+                $oldQuantity = $product->quantity;
+                $newQuantity = $data->quantity;
+
                 $product->update([
                     'category_id' => $data->category_id,
                     'unit_id' => $data->unit_id,
@@ -57,12 +61,30 @@ class ProductService
                     'name' => $data->name,
                     'purchase_price' => $data->purchase_price,
                     'selling_price' => $data->selling_price,
-                    'quantity' => $data->quantity,
+                    'quantity' => $newQuantity,
                     'min_stock' => $data->min_stock,
                     'is_active' => $data->is_active,
                     'description' => $data->description,
                     'notes' => $data->notes,
                 ]);
+
+                // Log stock movement if quantity changed
+                if ($oldQuantity !== $newQuantity) {
+                    $difference = $newQuantity - $oldQuantity;
+                    StockMovement::create([
+                        'product_id' => $product->id,
+                        'sku' => $product->sku,
+                        'product_name' => $product->name,
+                        'type' => $difference > 0 ? 'in' : 'out',
+                        'quantity' => abs($difference),
+                        'before_quantity' => $oldQuantity,
+                        'after_quantity' => $newQuantity,
+                        'reference_type' => 'product_adjustment',
+                        'reference_id' => $product->id,
+                        'reference_number' => $product->sku,
+                        'notes' => $difference > 0 ? 'Manual stock addition' : 'Manual stock deduction',
+                    ]);
+                }
 
                 return $product->refresh();
 

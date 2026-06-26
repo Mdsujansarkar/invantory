@@ -65,6 +65,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('reports')->name('reports.')->group(function () {
         Route::get('stock', [ProductReportController::class, 'stockReport'])->name('stock');
         Route::get('sales', [ProductReportController::class, 'salesReport'])->name('sales');
+        Route::get('stock-movement', [ProductReportController::class, 'stockMovementReport'])->name('stock-movement');
     });
 
     // =========================================================================
