@@ -92,6 +92,9 @@
                                 <x-dropdown-link :href="route('reports.sales')" :active="request()->routeIs('reports.sales')">
                                     বিক্রয় রিপোর্ট
                                 </x-dropdown-link>
+                                <x-dropdown-link :href="route('reports.stock-movement')" :active="request()->routeIs('reports.stock-movement')">
+                                    স্টক মুভমেন্ট রিপোর্ট
+                                </x-dropdown-link>
                             </x-slot>
                         </x-nav-dropdown>
 
@@ -264,6 +267,7 @@
                                 <div class="mt-2 flex flex-col gap-2 pl-4 border-l border-border ml-2">
                                     <a class="text-sm font-medium hover:underline py-1 {{ request()->routeIs('reports.stock') ? 'text-primary' : '' }}" href="{{ route('reports.stock') }}">স্টক রিপোর্ট</a>
                                     <a class="text-sm font-medium hover:underline py-1 {{ request()->routeIs('reports.sales') ? 'text-primary' : '' }}" href="{{ route('reports.sales') }}">বিক্রয় রিপোর্ট</a>
+                                    <a class="text-sm font-medium hover:underline py-1 {{ request()->routeIs('reports.stock-movement') ? 'text-primary' : '' }}" href="{{ route('reports.stock-movement') }}">স্টক মুভমেন্ট রিপোর্ট</a>
                                 </div>
                             </div>
                         </div>

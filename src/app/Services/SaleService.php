@@ -6,6 +6,7 @@ use Exception;
 use App\Models\Sale;
 use App\DTOs\SaleData;
 use App\Models\Product;
+use App\Models\StockMovement;
 use App\Enums\SaleStatus;
 use App\Enums\PaymentMethod;
 use App\Exceptions\SaleException;
@@ -70,8 +71,25 @@ class SaleService
                     }
 
                     // Update stock
+                    $beforeQuantity = $product->quantity;
                     $product->quantity -= $itemData->quantity;
                     $product->save();
+                    $afterQuantity = $product->quantity;
+
+                    // Log stock movement (deferred until sale is created to get sale ID)
+                    $stockMovements[] = [
+                        'product_id' => $product->id,
+                        'sku' => $product->sku,
+                        'product_name' => $product->name,
+                        'type' => 'out',
+                        'quantity' => $itemData->quantity,
+                        'before_quantity' => $beforeQuantity,
+                        'after_quantity' => $afterQuantity,
+                        'reference_type' => 'sale',
+                        'reference_id' => $sale->id, // Will be updated after sale is saved
+                        'reference_number' => null, // Will be updated with invoice number
+                        'notes' => 'Sale',
+                    ];
 
                     $unitPrice = $product->selling_price;
                     $quantity = $itemData->quantity;
@@ -104,6 +122,16 @@ class SaleService
                 // Batch insert items
                 if (!empty($saleItems)) {
                     \App\Models\SaleItem::insert($saleItems);
+                }
+
+                // Log stock movements with sale reference
+                if (!empty($stockMovements)) {
+                    foreach ($stockMovements as &$movement) {
+                        $movement['reference_id'] = $sale->id;
+                        $movement['reference_number'] = $sale->invoice_number;
+                    }
+                    unset($movement);
+                    StockMovement::insert($stockMovements);
                 }
 
                 if ($data->global_discount > $totalSubtotal) {
@@ -163,7 +191,25 @@ class SaleService
 
                     foreach ($sale->items as $item) {
                         if ($item->product) {
+                            $beforeQuantity = $item->product->quantity;
                             $item->product->increment('quantity', $item->quantity);
+                            $item->product->refresh();
+                            $afterQuantity = $item->product->quantity;
+
+                            // Log stock movement (restoration)
+                            StockMovement::create([
+                                'product_id' => $item->product->id,
+                                'sku' => $item->product->sku,
+                                'product_name' => $item->product->name,
+                                'type' => 'in',
+                                'quantity' => $item->quantity,
+                                'before_quantity' => $beforeQuantity,
+                                'after_quantity' => $afterQuantity,
+                                'reference_type' => 'sale_restoration',
+                                'reference_id' => $sale->id,
+                                'reference_number' => $sale->invoice_number,
+                                'notes' => 'Sale cancelled - stock restored',
+                            ]);
                         }
                     }
                 }
@@ -253,7 +299,25 @@ class SaleService
                     );
                 }
 
+                $beforeQuantity = $product->quantity;
                 $product->decrement('quantity', $item->quantity);
+                $product->refresh();
+                $afterQuantity = $product->quantity;
+
+                // Log stock movement (deduction again)
+                StockMovement::create([
+                    'product_id' => $product->id,
+                    'sku' => $product->sku,
+                    'product_name' => $product->name,
+                    'type' => 'out',
+                    'quantity' => $item->quantity,
+                    'before_quantity' => $beforeQuantity,
+                    'after_quantity' => $afterQuantity,
+                    'reference_type' => 'sale_restored',
+                    'reference_id' => $sale->id,
+                    'reference_number' => $sale->invoice_number,
+                    'notes' => 'Cancelled sale restored - stock deducted again',
+                ]);
             }
 
             // Restore to PENDING

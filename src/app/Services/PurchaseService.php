@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\Models\Purchase;
 use App\DTOs\PurchaseData;
 use App\Models\PurchaseItem;
+use App\Models\StockMovement;
 use App\Enums\PurchaseStatus;
 use Illuminate\Support\Facades\DB;
 use App\Exceptions\PurchaseException;
@@ -136,7 +137,25 @@ class PurchaseService
                 $product = Product::where('id', $item->product_id)->lockForUpdate()->first();
 
                 if ($product) {
+                    $beforeQuantity = $product->quantity;
                     $product->increment('quantity', $item->quantity);
+                    $product->refresh();
+                    $afterQuantity = $product->quantity;
+
+                    // Log stock movement
+                    StockMovement::create([
+                        'product_id' => $product->id,
+                        'sku' => $product->sku,
+                        'product_name' => $product->name,
+                        'type' => 'in',
+                        'quantity' => $item->quantity,
+                        'before_quantity' => $beforeQuantity,
+                        'after_quantity' => $afterQuantity,
+                        'reference_type' => 'purchase',
+                        'reference_id' => $purchase->id,
+                        'reference_number' => $purchase->invoice_number,
+                        'notes' => 'Purchase received',
+                    ]);
 
                     // Update latest purchase price and selling price
                     $updateData = ['purchase_price' => $item->unit_price];

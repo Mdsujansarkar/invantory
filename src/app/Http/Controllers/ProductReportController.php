@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\SaleItem;
 use App\Models\Sale;
+use App\Models\StockMovement;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -140,6 +141,88 @@ class ProductReportController extends Controller
             'totalRevenue',
             'totalQuantity',
             'totalOrders'
+        ));
+    }
+
+    /**
+     * Stock Movement Report - Track all stock changes by SKU and date range
+     */
+    public function stockMovementReport(Request $request)
+    {
+        $sku = $request->input('sku');
+        $startDate = $request->input('start_date');
+        $endDate = $request->input('end_date');
+        $type = $request->input('type'); // 'in', 'out', or null for all
+
+        $query = StockMovement::with(['product', 'creator'])
+            ->orderBy('created_at', 'desc');
+
+        // Filter by SKU if provided
+        if ($sku) {
+            $query->bySku($sku);
+        }
+
+        // Filter by date range
+        if ($startDate) {
+            $query->whereDate('created_at', '>=', $startDate);
+        }
+
+        if ($endDate) {
+            $query->whereDate('created_at', '<=', $endDate);
+        }
+
+        // Filter by type (in/out)
+        if ($type && in_array($type, ['in', 'out'])) {
+            $query->byType($type);
+        }
+
+        $movements = $query->paginate(100);
+
+        // Calculate summary statistics
+        $summaryQuery = StockMovement::select(
+                'sku',
+                'product_name',
+                DB::raw('SUM(CASE WHEN type = "in" THEN quantity ELSE 0 END) as total_in'),
+                DB::raw('SUM(CASE WHEN type = "out" THEN quantity ELSE 0 END) as total_out'),
+                DB::raw('SUM(CASE WHEN type = "in" THEN quantity ELSE -quantity END) as net_change')
+            )
+            ->groupBy('sku', 'product_name');
+
+        if ($sku) {
+            $summaryQuery->where('sku', $sku);
+        }
+
+        if ($startDate) {
+            $summaryQuery->whereDate('created_at', '>=', $startDate);
+        }
+
+        if ($endDate) {
+            $summaryQuery->whereDate('created_at', '<=', $endDate);
+        }
+
+        if ($type && in_array($type, ['in', 'out'])) {
+            $summaryQuery->where('type', $type);
+        }
+
+        $summary = $summaryQuery->get();
+
+        // Calculate totals
+        $totalIn = $movements->sum(function ($item) {
+            return $item->type === 'in' ? $item->quantity : 0;
+        });
+        $totalOut = $movements->sum(function ($item) {
+            return $item->type === 'out' ? $item->quantity : 0;
+        });
+
+        return view('reports.stock-movement-report', compact(
+            'movements',
+            'summary',
+            'sku',
+            'startDate',
+            'endDate',
+            'type',
+            'totalIn',
+            'totalOut'
         ));
     }
 }
